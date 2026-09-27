@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Architect's HTTPS Simulator</title>
+    <style>
+        :root {
+            --primary: #0f4c81;
+            --success: #198754;
+            --danger: #dc3545;
+            --dark: #1e293b;
+            --light: #f8fafc;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #e2e8f0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .simulator-container {
+            background: #fff;
+            width: 100%;
+            max-width: 900px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+        .header p {
+            color: #64748b;
+            font-weight: bold;
+            margin-bottom: 30px;
+        }
+        .stage-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            margin: 50px 0;
+            padding: 20px;
+            background: var(--light);
+            border-radius: 8px;
+            border: 2px dashed #cbd5e1;
+            min-height: 200px;
+        }
+        .actor {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 2;
+            width: 150px;
+        }
+        .actor-icon {
+            font-size: 60px;
+            margin-bottom: 10px;
+        }
+        .actor-title {
+            font-weight: bold;
+            color: var(--dark);
+            font-size: 18px;
+        }
+        .actor-inventory {
+            min-height: 40px;
+            margin-top: 10px;
+            font-size: 24px;
+            display: flex;
+            gap: 5px;
+        }
+        /* The Payload Animation */
+        .payload {
+            position: absolute;
+            font-size: 40px;
+            top: 40%;
+            left: 50%; /* Center initially */
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            transition: all 1s ease-in-out;
+            z-index: 1;
+            background: #fff;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .payload-text {
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--primary);
+            margin-top: 5px;
+        }
+        
+        /* Animation Classes */
+        .move-server-to-browser {
+            animation: serverToBrowser 2s forwards;
+        }
+        .move-browser-to-server {
+            animation: browserToServer 2s forwards;
+        }
+        .move-continuous {
+            animation: continuousTransfer 2s infinite alternate ease-in-out;
+        }
+
+        /* FIXED ANIMATIONS FOR RTL LAYOUT */
+        /* Server is on the RIGHT (left: 85%), Browser is on the LEFT (left: 15%) */
+        @keyframes serverToBrowser {
+            0% { left: 85%; opacity: 0; }
+            20% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { left: 15%; opacity: 0; }
+        }
+        @keyframes browserToServer {
+            0% { left: 15%; opacity: 0; }
+            20% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { left: 85%; opacity: 0; }
+        }
+        @keyframes continuousTransfer {
+            0% { left: 80%; opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { left: 20%; opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        .explanation-box {
+            background: #e0f2fe;
+            border-right: 5px solid #0284c7;
+            padding: 20px;
+            text-align: right;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            min-height: 100px;
+        }
+        .explanation-title {
+            font-weight: bold;
+            color: #0369a1;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        .explanation-text {
+            color: #0c4a6e;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        .keyword {
+            background: #0284c7;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        button {
+            padding: 12px 25px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .btn-next {
+            background-color: var(--primary);
+            color: white;
+        }
+        .btn-next:hover {
+            background-color: #0c3d69;
+        }
+        .btn-reset {
+            background-color: #94a3b8;
+            color: white;
+        }
+        .btn-reset:hover {
+            background-color: #64748b;
+        }
+        .progress-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .step-dot {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background-color: #cbd5e1;
+        }
+        .step-dot.active {
+            background-color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="simulator-container">
+        <div class="header">
+            <h1>هندسة الـ HTTPS (TLS Handshake)</h1>
+            <p>كيف نصنع نفقاً آمناً عبر الإنترنت؟</p>
+        </div>
+
+        <div class="progress-indicator" id="progress">
+            <div class="step-dot active"></div>
+            <div class="step-dot"></div>
+            <div class="step-dot"></div>
+            <div class="step-dot"></div>
+        </div>
+
+        <div class="explanation-box">
+            <div class="explanation-title" id="exp-title">مرحلة 0: الاستعداد (Standby)</div>
+            <div class="explanation-text" id="exp-text">
+                نحن الآن جاهزون لبدء الاتصال. المتصفح يريد الدخول إلى موقع البنك بشكل آمن. اضغط على "الخطوة التالية" لبدء عملية الـ TLS Handshake.
+            </div>
+        </div>
+
+        <div class="stage-area">
+            <!-- Server is placed on the Right in RTL -->
+            <div class="actor" id="server">
+                <div class="actor-icon">🏦</div>
+                <div class="actor-title">Web Server<br><small>(موقع البنك)</small></div>
+                <div class="actor-inventory" id="server-inventory">
+                    <span title="Private Key (مفتاح خاص)">🗝️</span> 
+                </div>
+            </div>
+
+            <!-- Payload (The item moving) -->
+            <div class="payload" id="payload">
+                <div id="payload-icon">✉️</div>
+                <div class="payload-text" id="payload-text">طلب اتصال</div>
+            </div>
+
+            <!-- Browser is placed on the Left in RTL -->
+            <div class="actor" id="browser">
+                <div class="actor-icon">💻</div>
+                <div class="actor-title">Browser<br><small>(المتصفح بتاعك)</small></div>
+                <div class="actor-inventory" id="browser-inventory">
+                    <!-- Empty at start -->
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn-reset" onclick="resetSim()">إعادة الضبط 🔄</button>
+            <button class="btn-next" id="next-btn" onclick="nextStep()">الخطوة التالية ⏭️</button>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 0;
+        
+        const payload = document.getElementById('payload');
+        const payloadIcon = document.getElementById('payload-icon');
+        const payloadText = document.getElementById('payload-text');
+        const browserInv = document.getElementById('browser-inventory');
+        const serverInv = document.getElementById('server-inventory');
+        const expTitle = document.getElementById('exp-title');
+        const expText = document.getElementById('exp-text');
+        const nextBtn = document.getElementById('next-btn');
+        const dots = document.querySelectorAll('.step-dot');
+
+        const steps = [
+            { // Step 0
+                title: "مرحلة 0: الاستعداد (Standby)",
+                text: "نحن الآن جاهزون لبدء الاتصال. المتصفح يريد الدخول إلى موقع البنك بشكل آمن. السيرفر يمتلك (مفتاحه الخاص 🗝️) الذي لا يشاركه مع أحد أبداً.",
+                browserInv: "",
+                serverInv: "🗝️"
+            },
+            { // Step 1: Connection
+                title: "الخطوة 1: التعارف (Connection)",
+                text: "السيرفر يرسل للمتصفح شيئين: <br>1. <span class='keyword'>الشهادة الرقمية (Certificate)</span>: لإثبات هويته عبر الـ CA.<br>2. <span class='keyword'>المفتاح العام (Public Key)</span>: وهو عبارة عن (قفل مفتوح 🔓) سيستخدمه المتصفح لاحقاً.",
+                icon: "📜 + 🔓",
+                pText: "شهادة + مفتاح عام",
+                anim: "move-server-to-browser",
+                browserInv: "📜 🔓",
+                serverInv: "🗝️"
+            },
+            { // Step 2: Key Exchange
+                title: "الخطوة 2: تبادل المفاتيح (Key Exchange)",
+                text: "الآن دور المتصفح. يقوم المتصفح بصناعة مفتاح سريع يسمى <span class='keyword'>المفتاح المشترك (Common Key 🔑)</span>. لكي يرسله بأمان، يقوم بوضعه في صندوق وإغلاقه بـ (المفتاح العام 🔓) الخاص بالسيرفر، ثم يرسله.",
+                icon: "📦🔒",
+                pText: "Common Key مشفر",
+                anim: "move-browser-to-server",
+                browserInv: "📜 🔑",
+                serverInv: "🗝️"
+            },
+            { // Step 3: Data Communication
+                title: "الخطوة 3: الاتصال السريع (Data Communication)",
+                text: "السيرفر استلم الصندوق المغلق. الشخص الوحيد في العالم الذي يمكنه فتحه هو السيرفر باستخدام <span class='keyword'>المفتاح الخاص (Private Key 🗝️)</span>. الآن، المتصفح والسيرفر كلاهما يمتلكان نفس (المفتاح المشترك 🔑). ستبدأ عملية نقل البيانات بسرعة وأمان!",
+                icon: "🔐",
+                pText: "بيانات مشفرة",
+                anim: "move-continuous",
+                browserInv: "📜 🔑",
+                serverInv: "🗝️ 🔑"
+            }
+        ];
+
+        function nextStep() {
+            if (currentStep >= 3) return;
+            
+            // Clean previous animation
+            payload.className = 'payload';
+            void payload.offsetWidth; // trigger reflow
+            
+            currentStep++;
+            updateUI();
+        }
+
+        function resetSim() {
+            currentStep = 0;
+            payload.className = 'payload';
+            updateUI();
+            nextBtn.disabled = false;
+            nextBtn.innerText = "الخطوة التالية ⏭️";
+        }
+
+        function updateUI() {
+            const step = steps[currentStep];
+            
+            expTitle.innerHTML = step.title;
+            expText.innerHTML = step.text;
+            
+            if (currentStep > 0) {
+                payloadIcon.innerHTML = step.icon;
+                payloadText.innerHTML = step.pText;
+                payload.classList.add(step.anim);
+            }
+
+            // Delay updating inventory to match animation timing
+            setTimeout(() => {
+                browserInv.innerHTML = step.browserInv;
+                serverInv.innerHTML = step.serverInv;
+            }, currentStep === 3 ? 0 : 1500);
+
+            // Update dots
+            dots.forEach((dot, index) => {
+                dot.className = 'step-dot' + (index === currentStep ? ' active' : '');
+            });
+
+            if (currentStep === 3) {
+                nextBtn.disabled = true;
+                nextBtn.innerText = "اكتمل الاتصال الآمن ✅";
+            }
+        }
+    </script>
+</body>
+</html>
